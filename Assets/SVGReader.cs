@@ -7,6 +7,10 @@ using System.Collections.Generic;
 public class SVGReader : MonoBehaviour
 {
     public TextAsset svgFile;
+    public Material svgMaterial;
+
+    private float width;
+    private float height;
 
     void Start()
     {
@@ -21,6 +25,12 @@ public class SVGReader : MonoBehaviour
         SVG svg = new SVG();
 
         XmlNode svgNode = document.SelectSingleNode("svg");
+
+        width = float.Parse(svgNode.Attributes.GetNamedItem("width").Value);
+        height = float.Parse(svgNode.Attributes.GetNamedItem("height").Value);
+
+        Debug.Log(width + " - " + height);
+
         XmlNodeList groupNodeList = svgNode.SelectNodes("g");
         foreach (XmlNode groupNode in groupNodeList)
         {
@@ -32,13 +42,16 @@ public class SVGReader : MonoBehaviour
                 XmlNodeList pathNodeList = groupNode.SelectNodes("path");
                 foreach (XmlNode pathNode in pathNodeList)
                 {
-                    SVGPath path = new SVGPath();
+                    SVGPath svgPath = new SVGPath();
 
-                    path.vertexList = parsePathVertexList(pathNode.Attributes.GetNamedItem("d").Value);
-                    string pathID = pathNode.Attributes.GetNamedItem("id").Value;
-                    string pathStyle = pathNode.Attributes.GetNamedItem("style").Value;
+                    string path = pathNode.Attributes.GetNamedItem("d").Value;
+                    string id = pathNode.Attributes.GetNamedItem("id").Value;
+                    string style = pathNode.Attributes.GetNamedItem("style").Value;
 
-                    group.pathList.Add(path);
+                    svgPath.vertexList = parsePathVertexList(path);
+                    svgPath.color = parsePathColor(style);
+
+                    group.pathList.Add(svgPath);
                 }
 
                 svg.groupList.Add(group);
@@ -50,12 +63,12 @@ public class SVGReader : MonoBehaviour
             SVGGroup group = svg.groupList[i];
             for (int j = 0; j < group.pathList.Count; j++)
             {
-                Debug.Log("PATH");
                 SVGPath path = group.pathList[j];
                 
-                Mesh mesh = createMesh(path.vertexList);
+                Mesh mesh = createMesh(path.vertexList, path.color);
 
-                AssetDatabase.CreateAsset(mesh, Application.dataPath + "/SVGMeshes/mesh" + j + ".asset");
+                string assetpath = "Assets/SVGMeshes";
+                AssetDatabase.CreateAsset(mesh, assetpath + "/mesh" + j + ".asset");
                 AssetDatabase.SaveAssets();
 
                 GameObject gameObject = new GameObject("Mesh" + j);
@@ -64,6 +77,7 @@ public class SVGReader : MonoBehaviour
                 MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
                 
                 meshFilter.mesh = mesh;
+                meshRenderer.sharedMaterial = svgMaterial;
             }
         }
     }
@@ -82,28 +96,35 @@ public class SVGReader : MonoBehaviour
             if (value != "m" && value != "z" && value != "L" && value != "l")
             {
                 string[] vertex = value.Split(',');
-                vertexList.Add(new Vector2(float.Parse(vertex[0]), float.Parse(vertex[1])));
+                vertexList.Add(new Vector2(float.Parse(vertex[0]), height - float.Parse(vertex[1])));
             }
         }
 
         return vertexList;
     }
 
-    private Mesh createMesh(List<Vector2> vertexList)
+    private Color parsePathColor(string style)
+    {
+        string hexcolor = style.Split(';')[0].Split(':')[1];
+        Color color = HexToColor(hexcolor);
+
+        return color;
+    }
+
+    private Mesh createMesh(List<Vector2> vertexList, Color color)
     {
         Vector3[] vertices = new Vector3[vertexList.Count];
+        Vector2[] uvs = new Vector2[vertexList.Count];
+        Color[] colors = new Color[vertexList.Count];
 
-        Triangulator triangulator = new Triangulator(vertexList.ToArray());
+        Triangulator triangulator = new Triangulator(vertexList);
         int[] triangles = triangulator.Triangulate();
 
         for (int i = 0; i < vertexList.Count; i++)
         {
             vertices[i] = new Vector3(vertexList[i].x, vertexList[i].y, 0);
-        }
-
-        for (int i = 0; i < triangles.Length; ++i)
-        {
-            //Debug.Log(triangles[i]);
+            uvs[i] = new Vector2(vertexList[i].x, vertexList[i].y);
+            colors[i] = color;
         }
 
         Mesh mesh = new Mesh();
@@ -111,12 +132,29 @@ public class SVGReader : MonoBehaviour
 
         mesh.vertices = vertices;
         mesh.triangles = triangles;
+        mesh.uv = uvs;
+        mesh.colors = colors;
 
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         mesh.Optimize();
 
         return mesh;
+    }
+
+    public static string ColorToHex(Color color)
+    {
+        string hex = color.r.ToString("X2") + color.g.ToString("X2") + color.b.ToString("X2");
+        return hex;
+    }
+
+    public static Color HexToColor(string hex)
+    {
+        byte r = byte.Parse(hex.Substring(1, 2), System.Globalization.NumberStyles.HexNumber);
+        byte g = byte.Parse(hex.Substring(3, 2), System.Globalization.NumberStyles.HexNumber);
+        byte b = byte.Parse(hex.Substring(5, 2), System.Globalization.NumberStyles.HexNumber);
+
+        return new Color32(r, g, b, 255);
     }
 }
 
@@ -156,4 +194,11 @@ public class Triangle
     public int v1Index;
     public int v2Index;
     public int v3Index;
+}
+
+public class Vertex
+{
+    public float x;
+    public float y;
+    public Color color;
 }
