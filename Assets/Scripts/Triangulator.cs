@@ -4,6 +4,8 @@ using System.Collections.Generic;
 
 public class Triangulator
 {
+    private List<Vector2> vertices;
+
     private List<Vector2> vertexList;
     private List<int> triangleList;
 
@@ -12,27 +14,24 @@ public class Triangulator
     private List<int> convexVertexList;
     private List<int> reflexVertexList;
 
-    private bool isClockWise;
+    private bool isClockwise = true;
 
     public Triangulator(float width, float height, List<Vector2> vertices)
     {
-        vertexList = vertices;
+        this.vertices = vertices;
 
+        vertexList = vertices;
         for (int i = 0; i < vertices.Count; i++)
         {
             Vector2 vertex = new Vector2(vertexList[i].x - width / 2, vertexList[i].y - height / 2);
-            vertexList[i] = vertex;
+            vertexList[i] = new Vector2(vertex.x, vertex.y);
         }
 
         vertexIndexList = new List<int>();
         for (int i = 0; i < vertices.Count; i++)
         {
-            Vector2 vertex = new Vector2();
             vertexIndexList.Add(i);
         }
-
-        isClockWise = isPolygonClockWise();
-        Debug.Log("isClockWise: " + isClockWise);
     }
 
     public int[] Triangulate()
@@ -43,6 +42,13 @@ public class Triangulator
         }
 
         // Set up phase
+        initializeConvexList();
+        initializeReflexList();
+        initializeEarList();
+
+
+        isClockwise = !(convexVertexList.Count > reflexVertexList.Count);
+
         initializeConvexList();
         initializeReflexList();
         initializeEarList();
@@ -92,14 +98,14 @@ public class Triangulator
         Vector2 v1v0 = v1 - v0;
         Vector2 v1v2 = v1 - v2;
 
-        //if (isClockWise)
-        //{
-        //    return angleSign(v1v0, v1v2) > 0;
-        //}
-        //else
-        //{
+        if (!isClockwise)
+        {
+            return angleSign(v1v0, v1v2) > 0;
+        }
+        else
+        {
             return angleSign(v1v0, v1v2) < 0;
-        //}
+        }
     }
 
     private float angleSign(Vector2 v1, Vector2 v2)
@@ -124,30 +130,6 @@ public class Triangulator
  
         float finalAngle = sign * angle;
         return finalAngle;
-    }
-
-    private bool isPolygonClockWise()
-    {
-        int concaveSum = 0;
-        int convexSum = 0;
-
-        for (int i = 0; i < vertexList.Count - 2; i++)
-        {
-            int i1 = (i + 1) > (vertexList.Count - 1) ? (i + 1) % vertexList.Count : (i + 1);
-            int i2 = (i + 2) > (vertexList.Count - 1) ? (i + 2) % vertexList.Count : (i + 2);
-
-            Vector3 p1 = new Vector3(vertexList[i].x, vertexList[0].y, 0);
-            Vector3 p2 = new Vector3(vertexList[i1].x, vertexList[1].y, 0);
-            Vector3 p3 = new Vector3(vertexList[i2].x, vertexList[2].y, 0);
-
-            Vector3 v1 = p1 - p2;
-            Vector3 v2 = p3 - p2;
-
-            if (Vector3.Cross(v1, v2).z > 0) convexSum++;
-            else concaveSum++;
-        }
-        
-        return convexSum > concaveSum;
     }
 
     private bool isEar(int vertexIndex)
@@ -239,9 +221,18 @@ public class Triangulator
             int nextIndex = calculateNextIndex(earIndex);
 
             // Add the ear to our output triangle list
-            triangleList.Add(prevIndex);
-            triangleList.Add(earIndex);
-            triangleList.Add(nextIndex);
+            if (isClockwise)
+            {
+                triangleList.Add(prevIndex);
+                triangleList.Add(earIndex);
+                triangleList.Add(nextIndex);
+            }
+            else
+            { 
+                triangleList.Add(nextIndex);
+                triangleList.Add(earIndex);
+                triangleList.Add(prevIndex);
+            }
 
             // Remove the ear from the ear list and the vertex from the vertex list
             earVertexList.RemoveAt(0);
@@ -259,9 +250,18 @@ public class Triangulator
         }
 
         // Add the remaining triangle
-        triangleList.Add(vertexIndexList[0]);
-        triangleList.Add(vertexIndexList[1]);
-        triangleList.Add(vertexIndexList[2]);
+        if (isClockwise)
+        {
+            triangleList.Add(vertexIndexList[0]);
+            triangleList.Add(vertexIndexList[1]);
+            triangleList.Add(vertexIndexList[2]);
+        }
+        else
+        {
+            triangleList.Add(vertexIndexList[2]);
+            triangleList.Add(vertexIndexList[1]);
+            triangleList.Add(vertexIndexList[0]);
+        }
 
         return triangleList.ToArray();
     }

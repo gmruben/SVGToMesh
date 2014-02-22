@@ -8,7 +8,8 @@ using System.Collections.Generic;
 public class SVGReader : MonoBehaviour
 {
     public TextAsset svgFile;
-    public Material svgMaterial;
+    public Material svgColorMaterial;
+    public Material svgAlphaMaterial;
 
     private float width;
     private float height;
@@ -33,8 +34,10 @@ public class SVGReader : MonoBehaviour
         XmlNodeList groupNodeList = svgNode.SelectNodes("g");
         foreach (XmlNode groupNode in groupNodeList)
         {
-            string display = groupNode.Attributes.GetNamedItem("style").Value.Split(':')[1];
-            if (display != null && display == "inline")
+            string display = null;
+            XmlNode styleNode = groupNode.Attributes.GetNamedItem("style");
+            if (styleNode != null) display = styleNode.Value.Split(':')[1];
+            if (styleNode == null || (styleNode != null && display == "inline"))
             {
                 SVGGroup group = new SVGGroup();
                 
@@ -47,6 +50,7 @@ public class SVGReader : MonoBehaviour
                     string id = pathNode.Attributes.GetNamedItem("id").Value;
                     string style = pathNode.Attributes.GetNamedItem("style").Value;
 
+                    svgPath.id = id;
                     svgPath.vertexList = parsePathVertexList(path);
                     svgPath.color = parsePathColor(style);
 
@@ -57,6 +61,9 @@ public class SVGReader : MonoBehaviour
             }
         }
 
+        GameObject obj = new GameObject(svgFile.name);
+
+        int count = 0;
         for (int i = 0; i < svg.groupList.Count; i++)
         {
             SVGGroup group = svg.groupList[i];
@@ -67,25 +74,35 @@ public class SVGReader : MonoBehaviour
                 Mesh mesh = createMesh(path.vertexList, path.color);
 
                 string assetpath = "Assets/SVGMeshes";
-                AssetDatabase.CreateAsset(mesh, assetpath + "/" + svgFile.name + "_" + j + ".asset");
+                AssetDatabase.CreateAsset(mesh, assetpath + "/" + svgFile.name + "_" + path.id + ".asset");
                 AssetDatabase.SaveAssets();
 
-                GameObject gameObject = new GameObject(svgFile.name + "_" + j);
-                
+                GameObject gameObject = new GameObject(path.id);
+                gameObject.transform.position = new Vector3(0, 0, -(count) * 0.025f - j * 0.025f);
+                gameObject.transform.parent = obj.transform;
                 MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
                 MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
                 
                 meshFilter.mesh = mesh;
-                meshRenderer.sharedMaterial = svgMaterial;
                 meshRenderer.castShadows = false;
                 meshRenderer.receiveShadows = false;
 
-                //Create Hole Cup Prefab
-                string svgpath = "Assets/SVG";
-                if (!Directory.Exists(svgpath)) Directory.CreateDirectory(svgpath);
-                PrefabUtility.CreatePrefab(svgpath + "/" + svgFile.name + ".prefab", gameObject);
+                if (path.color.a == 1)
+                {
+                    meshRenderer.sharedMaterial = svgColorMaterial;
+                }
+                else
+                {
+                    meshRenderer.sharedMaterial = svgAlphaMaterial;
+                }
             }
+            count += group.pathList.Count;
         }
+
+        //Create Hole Cup Prefab
+        string svgpath = "Assets/SVG";
+        if (!Directory.Exists(svgpath)) Directory.CreateDirectory(svgpath);
+        PrefabUtility.CreatePrefab(svgpath + "/" + svgFile.name + ".prefab", obj);
     }
 
     private List<Vector2> parsePathVertexList(string path)
@@ -131,11 +148,6 @@ public class SVGReader : MonoBehaviour
                 lastVector = new Vector2(x, y);
                 vertexList.Add(lastVector);
 
-                GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                quad.name = index.ToString();
-                quad.transform.localScale = Vector3.one * 2.5f;
-                quad.transform.position = new Vector3(lastVector.x, lastVector.y, 0);
-
                 index++;
             }
         }
@@ -145,8 +157,23 @@ public class SVGReader : MonoBehaviour
 
     private Color parsePathColor(string style)
     {
-        string hexcolor = style.Split(';')[0].Split(':')[1];
-        Color color = HexToColor(hexcolor);
+        Color color = Color.black;
+
+        string[] properties = style.Split(';');
+        for (int i = 0; i < properties.Length; i++)
+        {
+            string name = properties[i].Split(':')[0];
+            if (name == "fill")
+            {
+                string hexcolor = properties[i].Split(':')[1];
+                color = HexToColor(hexcolor);
+            }
+            else if (name == "fill-opacity")
+            {
+                float alpha = float.Parse(properties[i].Split(':')[1]);
+                color.a = alpha;
+            }
+        }
 
         return color;
     }
@@ -190,11 +217,22 @@ public class SVGReader : MonoBehaviour
 
     public static Color HexToColor(string hex)
     {
-        byte r = byte.Parse(hex.Substring(1, 2), System.Globalization.NumberStyles.HexNumber);
-        byte g = byte.Parse(hex.Substring(3, 2), System.Globalization.NumberStyles.HexNumber);
-        byte b = byte.Parse(hex.Substring(5, 2), System.Globalization.NumberStyles.HexNumber);
+        Color32 color;
 
-        return new Color32(r, g, b, 255);
+        if (hex == "none")
+        {
+            color = new Color(0, 0, 0, 255);
+        }
+        else
+        {
+            byte r = byte.Parse(hex.Substring(1, 2), System.Globalization.NumberStyles.HexNumber);
+            byte g = byte.Parse(hex.Substring(3, 2), System.Globalization.NumberStyles.HexNumber);
+            byte b = byte.Parse(hex.Substring(5, 2), System.Globalization.NumberStyles.HexNumber);
+
+            color = new Color32(r, g, b, 255);
+        }
+
+        return color;
     }
 }
 
@@ -220,6 +258,7 @@ public class SVGGroup
 
 public class SVGPath
 {
+    public string id;
     public List<Vector2> vertexList;
     public Color color;
 
