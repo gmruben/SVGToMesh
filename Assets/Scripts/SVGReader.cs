@@ -5,33 +5,50 @@ using System.Xml;
 using System.Collections;
 using System.Collections.Generic;
 
-public class SVGReader : MonoBehaviour
+public class SVGReader
 {
-    public TextAsset svgFile;
-    public Material svgColorMaterial;
-    public Material svgAlphaMaterial;
+    private TextAsset svgFile;
+    private Material svgColorMaterial;
+    private Material svgAlphaMaterial;
 
     private float width;
     private float height;
 
-    void Start()
+    public SVGReader(TextAsset svgFile)
     {
-        read();
+        this.svgFile = svgFile;
+
+        svgColorMaterial = Resources.LoadAssetAtPath("Assets/Materials/VertexColor_Material.mat", typeof(UnityEngine.Object)) as Material;
+        svgAlphaMaterial = Resources.LoadAssetAtPath("Assets/Materials/VertexColorAlpha_Material.mat", typeof(UnityEngine.Object)) as Material;
+        Debug.Log(svgAlphaMaterial);
+        //meshRenderer.sharedMaterial = Resources.LoadAssetAtPath("Assets/BaseMaterials/HoleCup_Material.mat", typeof(UnityEngine.Object)) as Material;
     }
 
-    private void read()
+    public void export(string name)
     {
+        NameTable nameTable = new NameTable();
+        XmlNamespaceManager nameSpaceManager = new XmlNamespaceManager(nameTable);
+
+        //Add namespaces
+        nameSpaceManager.AddNamespace("svg", "http://www.w3.org/2000/svg");
+        nameSpaceManager.AddNamespace("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+        nameSpaceManager.AddNamespace("cc", "http://creativecommons.org/ns#");
+        nameSpaceManager.AddNamespace("dc", "http://purl.org/dc/elements/1.1/");
+        
+        XmlParserContext parserContext = new XmlParserContext(null, nameSpaceManager, null, XmlSpace.None);
+        XmlTextReader txtReader = new XmlTextReader(svgFile.text, XmlNodeType.Document, parserContext);
+
         XmlDocument document = new XmlDocument();
-        document.LoadXml(svgFile.text);
+        document.Load(txtReader);
 
         SVG svg = new SVG();
 
-        XmlNode svgNode = document.SelectSingleNode("svg");
+        XmlNode svgNode = document.SelectSingleNode("svg:svg", nameSpaceManager);
 
         width = float.Parse(svgNode.Attributes.GetNamedItem("width").Value);
         height = float.Parse(svgNode.Attributes.GetNamedItem("height").Value);
-
-        XmlNodeList groupNodeList = svgNode.SelectNodes("g");
+        
+        XmlNodeList groupNodeList = svgNode.SelectNodes("svg:g", nameSpaceManager);
         foreach (XmlNode groupNode in groupNodeList)
         {
             string display = null;
@@ -40,8 +57,8 @@ public class SVGReader : MonoBehaviour
             if (styleNode == null || (styleNode != null && display == "inline"))
             {
                 SVGGroup group = new SVGGroup();
-                
-                XmlNodeList pathNodeList = groupNode.SelectNodes("path");
+
+                XmlNodeList pathNodeList = groupNode.SelectNodes("svg:path", nameSpaceManager);
                 foreach (XmlNode pathNode in pathNodeList)
                 {
                     SVGPath svgPath = new SVGPath();
@@ -70,10 +87,16 @@ public class SVGReader : MonoBehaviour
             for (int j = 0; j < group.pathList.Count; j++)
             {
                 SVGPath path = group.pathList[j];
-                
+
                 Mesh mesh = createMesh(path.vertexList, path.color);
 
                 string assetpath = "Assets/SVGMeshes";
+                if (!Directory.Exists(assetpath)) Directory.CreateDirectory(assetpath);
+                assetpath += "/" + name;
+                if (!Directory.Exists(assetpath)) Directory.CreateDirectory(assetpath);
+                assetpath += "/" + svgFile.name;
+                if (!Directory.Exists(assetpath)) Directory.CreateDirectory(assetpath);
+
                 AssetDatabase.CreateAsset(mesh, assetpath + "/" + svgFile.name + "_" + path.id + ".asset");
                 AssetDatabase.SaveAssets();
 
@@ -82,7 +105,7 @@ public class SVGReader : MonoBehaviour
                 gameObject.transform.parent = obj.transform;
                 MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
                 MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
-                
+
                 meshFilter.mesh = mesh;
                 meshRenderer.castShadows = false;
                 meshRenderer.receiveShadows = false;
@@ -100,8 +123,11 @@ public class SVGReader : MonoBehaviour
         }
 
         //Create Hole Cup Prefab
-        string svgpath = "Assets/SVG";
+        string svgpath = "Assets/SVGPrefabs";
         if (!Directory.Exists(svgpath)) Directory.CreateDirectory(svgpath);
+        svgpath += "/" + name;
+        if (!Directory.Exists(svgpath)) Directory.CreateDirectory(svgpath);
+
         PrefabUtility.CreatePrefab(svgpath + "/" + svgFile.name + ".prefab", obj);
     }
 
@@ -114,16 +140,16 @@ public class SVGReader : MonoBehaviour
         List<Vector2> vertexList = new List<Vector2>();
         Vector2 lastVector = new Vector2(0, height);
         bool isAbsolute = false;
-        
+
         string[] vertices = path.Split(' ');
         for (int i = 0; i < vertices.Length; i++)
-        {           
+        {
             string value = vertices[i];
             if (value == "m" || value == "l")
             {
                 isAbsolute = false;
             }
-            else if (value == "M" || value == "L" )
+            else if (value == "M" || value == "L")
             {
                 isAbsolute = true;
             }

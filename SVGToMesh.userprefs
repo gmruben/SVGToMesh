@@ -1,8 +1,8 @@
 ﻿<Properties>
-  <MonoDevelop.Ide.Workspace />
-  <MonoDevelop.Ide.Workbench ActiveDocument="Assets\SVGReader.cs">
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.Workbench ActiveDocument="Assets\Shaders\VertexColorAlpha_Shader.shader">
     <Files>
-      <File FileName="Assets\SVGReader.cs" Line="155" Column="1" />
+      <File FileName="Assets\Shaders\VertexColorAlpha_Shader.shader" Line="14" Column="17" />
     </Files>
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.Breakpoints>
